@@ -15,9 +15,13 @@ import com.dynamicstay.pricing.PricingContext;
 import com.dynamicstay.repository.BookingRepository;
 import com.dynamicstay.repository.GuestRepository;
 import com.dynamicstay.repository.TransactionRepository;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,34 +40,43 @@ public class BookingService {
     private final TransactionRepository transactionRepository;
     private final RoomService roomService;
     private final RateEngine rateEngine;
-    private final OccupancyService occupancyService;
+        private final OccupancyService occupancyService;
+        private final ApplicationEventPublisher eventPublisher;
+        private final MeterRegistry meterRegistry;
 
     /** Quote a price without creating a booking (used by the "Get Quote" UI action). */
     public PriceQuoteResponse quote(PriceQuoteRequest request) {
-        validateDateRange(request.getCheckIn(), request.getCheckOut());
-        Room room = roomService.getRoomEntity(request.getRoomId());
+        Timer.Sample timer = Timer.start(meterRegistry);
+        try {
+            validateDateRange(request.getCheckIn(), request.getCheckOut());
+            Room room = roomService.getRoomEntity(request.getRoomId());
 
-        PricingContext context = buildContext(room, request.getCheckIn(), request.getCheckOut());
-        RateEngine.Quote result = rateEngine.quote(context);
+            PricingContext context = buildContext(room, request.getCheckIn(), request.getCheckOut());
+            RateEngine.Quote result = rateEngine.quote(context);
 
-        long nights = context.nights();
-        BigDecimal total = result.price().multiply(BigDecimal.valueOf(nights));
+            long nights = context.nights();
+            BigDecimal total = result.price().multiply(BigDecimal.valueOf(nights));
 
-        return PriceQuoteResponse.builder()
-                .roomId(room.getId())
-                .baseRate(room.getBaseRate())
-                .quotedPricePerNight(result.price())
-                .nights(nights)
-                .totalPrice(total)
-                .strategyUsed(result.dominantStrategy().name())
-                .occupancyRateAtQuote(context.getCurrentOccupancyRate())
-                .build();
+            return PriceQuoteResponse.builder()
+                    .roomId(room.getId())
+                    .baseRate(room.getBaseRate())
+                    .quotedPricePerNight(result.price())
+                    .nights(nights)
+                    .totalPrice(total)
+                    .strategyUsed(result.dominantStrategy().name())
+                    .occupancyRateAtQuote(context.getCurrentOccupancyRate())
+                    .build();
+                } finally {
+            timer.stop(meterRegistry.timer("pricing.quote.duration"));
+                }
     }
 
     @Transactional
     public BookingResponse createBooking(BookingRequest request) {
-        validateDateRange(request.getCheckIn(), request.getCheckOut());
-        Room room = roomService.getRoomEntity(request.getRoomId());
+        Timer.Sample timer = Timer.start(meterRegistry);
+        try {
+            validateDateRange(request.getCheckIn(), request.getCheckOut());
+            Room room = roomService.getRoomEntity(request.getRoomId());
 
         List<Booking> overlapping = bookingRepository.findOverlapping(
                 room.getId(), request.getCheckIn(), request.getCheckOut());
@@ -93,7 +106,15 @@ public class BookingService {
                 .status(BookingStatus.CONFIRMED)
                 .pricingStrategyUsed(result.dominantStrategy().name())
                 .build();
-        booking = bookingRepository.save(booking);
+            try {
+                // Flush now so PostgreSQL arbitrates concurrent requests before we
+                // create the payment record or publish the post-commit event.
+                booking = bookingRepository.saveAndFlush(booking);
+            } catch (DataIntegrityViolationException ex) {
+                meterRegistry.counter("booking.failure.count", "reason", "conflict").increment();
+                throw new BookingConflictException(
+                        "Room " + room.getRoomNumber() + " is already booked for an overlapping date range.");
+            }
 
         Transaction transaction = Transaction.builder()
                 .booking(booking)
@@ -103,14 +124,17 @@ public class BookingService {
         transactionRepository.save(transaction);
 
         double occupancyAfter = occupancyService.currentOccupancyRate(request.getCheckIn());
-        occupancyService.logEvent(room.getId(), "BOOKING_CREATED", occupancyAfter,
-                request.getCheckIn(), result.dominantStrategy().name(), totalPrice);
+        eventPublisher.publishEvent(new OccupancyEventRequested(room.getId(), "BOOKING_CREATED", occupancyAfter,
+                request.getCheckIn(), result.dominantStrategy().name(), totalPrice));
 
         log.info("Booking {} created for room {} ({} -> {}) at {} using {} strategy",
                 booking.getId(), room.getRoomNumber(), request.getCheckIn(), request.getCheckOut(),
                 totalPrice, result.dominantStrategy());
-
-        return BookingResponse.fromEntity(booking);
+        meterRegistry.counter("booking.creation.count", "outcome", "success").increment();
+                        return BookingResponse.fromEntity(booking);
+                } finally {
+                        timer.stop(meterRegistry.timer("booking.creation.duration"));
+                }
     }
 
     @Transactional
@@ -121,9 +145,9 @@ public class BookingService {
         booking.setStatus(BookingStatus.CANCELLED);
         booking = bookingRepository.save(booking);
 
-        occupancyService.logEvent(booking.getRoom().getId(), "CANCELLATION",
-                occupancyService.currentOccupancyRate(booking.getCheckIn()),
-                booking.getCheckIn(), booking.getPricingStrategyUsed(), booking.getFinalPrice());
+        eventPublisher.publishEvent(new OccupancyEventRequested(booking.getRoom().getId(), "CANCELLATION",
+                occupancyService.currentOccupancyRate(booking.getCheckIn()), booking.getCheckIn(),
+                booking.getPricingStrategyUsed(), booking.getFinalPrice()));
 
         return BookingResponse.fromEntity(booking);
     }

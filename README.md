@@ -68,6 +68,16 @@ flowchart TB
 
     subgraph SVC["⚙️ Service Layer"]
         RS[RoomService]
+
+To run the Spring integration tests, Docker must be running because Testcontainers
+starts disposable PostgreSQL and MongoDB instances:
+
+```bash
+./mvnw -Pintegration-test test
+```
+
+The integration suite includes the concurrent same-room booking race, persistence,
+cancellation, and the PostgreSQL exclusion-constraint conflict path.
         BS[BookingService]
         RE[RateEngine]
         OS[OccupancyService]
@@ -106,6 +116,13 @@ flowchart TB
     BS --> GUEST
     BS --> TXN
     BS -- on booking event --> OS
+
+Interactive OpenAPI documentation is available at `http://localhost:8080/swagger-ui`
+when the backend is running. Actuator health, readiness, metrics, and Prometheus
+endpoints are available under `/actuator`.
+
+GitHub Actions runs backend unit tests, Testcontainers integration tests, and the
+packaged build on pushes and pull requests to `main`.
     RE --> PS
     RE -- reads occupancy/history --> ROOM
     RE -- reads occupancy/history --> BOOK
@@ -495,5 +512,7 @@ This is a scoped portfolio project, not a production system. A few deliberate si
 - ⚠️ **Payments are simulated** — `Transaction.paymentStatus` is always `COMPLETED` rather than integrated with a real payment gateway.
 - ⚠️ **Pricing model is intentionally simple/explainable** (tiered multipliers) rather than a trained demand-forecasting model, since the goal is demonstrating clean OOP design and system architecture, not ML.
 - ⚠️ **CORS is wide open** (`allowedOriginPatterns("*")`) for easy local demoing — would be locked down before any real deployment.
+- ⚠️ **Authentication/RBAC is intentionally deferred** until a real identity provider and manager/staff permission model are selected.
+- ⚠️ **Hosted deployment is not included** because no cloud target or production secret strategy is specified; the CI pipeline validates the build and tests.
 
 See [Section 4](#4-architecture-decision-records-adrs) for the reasoning and tradeoffs behind each of these.

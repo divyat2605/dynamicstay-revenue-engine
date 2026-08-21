@@ -7,6 +7,11 @@ import com.dynamicstay.repository.OccupancyEventRepository;
 import com.dynamicstay.repository.RoomRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.retry.annotation.Backoff;
+import org.springframework.retry.annotation.Recover;
+import org.springframework.retry.annotation.Retryable;
+import org.springframework.transaction.event.TransactionalEventListener;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
@@ -26,6 +31,7 @@ public class OccupancyService {
     private final BookingRepository bookingRepository;
     private final RoomRepository roomRepository;
     private final OccupancyEventRepository occupancyEventRepository;
+    private final MeterRegistry meterRegistry;
 
     public double currentOccupancyRate(LocalDate date) {
         long totalRooms = roomRepository.findByActiveTrue().size();
@@ -55,15 +61,24 @@ public class OccupancyService {
     }
 
     @Async
-    public void logEvent(Long roomId, String eventType, double occupancyAtEvent,
-                          LocalDate date, String strategyUsed, BigDecimal finalPrice) {
+    @Retryable(maxAttempts = 3, backoff = @Backoff(delay = 500, multiplier = 2))
+    @TransactionalEventListener
+    public void logEvent(OccupancyEventRequested request) {
         OccupancyEvent event = OccupancyEvent.builder()
-                .roomId(roomId)
-                .eventType(eventType)
-                .occupancyRateAtEvent(occupancyAtEvent)
-                .date(date)
-                .metadata(OccupancyEvent.metadata(strategyUsed, finalPrice))
+                .roomId(request.roomId())
+                .eventType(request.eventType())
+                .occupancyRateAtEvent(request.occupancyAtEvent())
+                .date(request.date())
+                .metadata(OccupancyEvent.metadata(request.strategyUsed(), request.finalPrice()))
                 .build();
         occupancyEventRepository.save(event);
+    }
+
+    @Recover
+    public void recoverEvent(Exception exception, OccupancyEventRequested request) {
+        meterRegistry.counter("mongo.event.failure.count").increment();
+        org.slf4j.LoggerFactory.getLogger(OccupancyService.class)
+                .error("Failed to persist occupancy event after retries for room {} and date {}",
+                        request.roomId(), request.date(), exception);
     }
 }
