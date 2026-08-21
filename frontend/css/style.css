@@ -149,6 +149,7 @@ th { color: var(--muted); font-weight: 500; font-size: 12px; text-transform: upp
 .btn-primary:hover { background: #3f78e0; }
 .btn-secondary { background: #262a37; color: var(--text); }
 .btn-secondary:hover { background: #303546; }
+.cancel-booking-btn { padding: 6px 10px; font-size: 12px; }
 
 .quote-result {
   margin-top: 14px;

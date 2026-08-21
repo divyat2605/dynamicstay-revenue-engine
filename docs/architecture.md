@@ -171,7 +171,7 @@ stateDiagram-v2
     QUOTED --> CONFIRMED : booking created<br/>(Postgres txn commits)
     CONFIRMED --> CHECKED_IN : guest arrives
     CHECKED_IN --> CHECKED_OUT : stay completed
-    CONFIRMED --> CANCELLED : manager/guest cancels
+    CONFIRMED --> CANCELLED : admin cancels
     QUOTED --> [*] : quote expires / abandoned
     CHECKED_OUT --> [*]
     CANCELLED --> [*]

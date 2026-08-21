@@ -85,6 +85,7 @@ public class BookingService {
         List<Booking> overlapping = bookingRepository.findOverlapping(
                 room.getId(), request.getCheckIn(), request.getCheckOut());
         if (!overlapping.isEmpty()) {
+            meterRegistry.counter("booking.failure.count", "reason", "conflict").increment();
             throw new BookingConflictException(
                     "Room " + room.getRoomNumber() + " is already booked for an overlapping date range.");
         }
@@ -152,6 +153,7 @@ public class BookingService {
         }
         booking.setStatus(BookingStatus.CANCELLED);
         booking = bookingRepository.save(booking);
+        meterRegistry.counter("booking.cancellation.count", "outcome", "success").increment();
 
         eventPublisher.publishEvent(new OccupancyEventRequested(booking.getRoom().getId(), "CANCELLATION",
                 occupancyService.currentOccupancyRate(booking.getCheckIn()), booking.getCheckIn(),

@@ -179,7 +179,7 @@ stateDiagram-v2
     QUOTED --> CONFIRMED : booking created<br/>(Postgres txn commits)
     CONFIRMED --> CHECKED_IN : guest arrives
     CHECKED_IN --> CHECKED_OUT : stay completed
-    CONFIRMED --> CANCELLED : manager/guest cancels
+    CONFIRMED --> CANCELLED : admin cancels
     QUOTED --> [*] : quote expires / abandoned
     CHECKED_OUT --> [*]
     CANCELLED --> [*]
@@ -271,8 +271,8 @@ erDiagram
 classDiagram
     class PricingStrategy {
         <<interface>>
-        +calculate(Room, DateRange, OccupancySnapshot) BigDecimal
-        +weight(context) double
+        +calculatePrice(PricingContext) BigDecimal
+        +getType() PricingStrategyType
     }
     class SeasonalPricing {
         +calculate(...) BigDecimal
@@ -284,10 +284,10 @@ classDiagram
         +calculate(...) BigDecimal
     }
     class RateEngine {
-        -List~PricingStrategy~ strategies
-        +quote(roomId, checkIn, checkOut) Quote
-        -selectDominantStrategy(context) PricingStrategy
-        -blend(results, weights) BigDecimal
+        -SeasonalPricing seasonalPricing
+        -OccupancyBasedPricing occupancyBasedPricing
+        -LastMinutePricing lastMinutePricing
+        +quote(PricingContext) Quote
     }
 
     PricingStrategy <|.. SeasonalPricing
@@ -302,13 +302,13 @@ classDiagram
 
 | Layer | Technology | Why |
 |---|---|---|
-| Backend | Java 17, Spring Boot 3.3 (Web, Validation, JPA, Mongo) | Industry-standard, strongly-typed, testable |
+| Backend | Java 17, Spring Boot 3.3 (Web, Security, Validation, JPA, Mongo) | Industry-standard, strongly-typed, testable |
 | Relational DB | PostgreSQL 16 + Flyway | ACID transactions, referential integrity for bookings/payments |
 | Document DB | MongoDB 7 | Schema-flexible, append-mostly analytics/event data |
 | Frontend | Vanilla JavaScript + Chart.js | Lightweight, no build step, easy to demo |
-| Testing (unit) | JUnit 5 + Mockito + AssertJ | Thorough coverage of the pricing engine |
+| Testing (unit) | JUnit 5 + Mockito + AssertJ | Pricing boundaries, blending, security slices, and cancellation rules |
 | Testing (E2E) | Selenium 4 + JUnit 5 + WebDriverManager (Page Object Model) | Automated browser verification of the core flow |
-| Infra (local) | Docker Compose | One command to stand up Postgres + Mongo |
+| Infra (local/deployment) | Docker Compose, multi-stage Dockerfile | Local data stores plus a non-root production-style backend image |
 
 ---
 
@@ -342,6 +342,11 @@ frontend CORS origins, and authentication credentials from environment variables
 Production must set all `DYNAMICSTAY_*`, database, and `CORS_ALLOWED_ORIGINS`
 values explicitly. `CORS_ALLOWED_ORIGINS` is a comma-separated allow-list; the
 application never configures `*`.
+
+The pricing model can be tuned without code changes through the `PRICING_*`
+variables in `.env.example`. Defaults preserve the tested demo thresholds and
+multipliers; invalid threshold ordering fails application startup rather than
+silently producing unpredictable prices.
 
 ## 5. Architecture Decision Records (ADRs)
 
@@ -497,7 +502,9 @@ cd backend
 mvn test
 ```
 
-This runs the JUnit + Mockito suite covering all three pricing strategies and `RateEngine`'s selection/blending logic.
+This runs the JUnit + Mockito suite covering all three pricing strategies,
+configurable boundaries, `RateEngine` selection/blending, cancellation rules,
+and the security web slice.
 
 To run the Spring integration tests, Docker must be running because Testcontainers
 starts disposable PostgreSQL and MongoDB instances:
@@ -506,8 +513,9 @@ starts disposable PostgreSQL and MongoDB instances:
 mvn -Pintegration-test test
 ```
 
-The integration suite includes the concurrent same-room booking race, persistence,
-cancellation, and the PostgreSQL exclusion-constraint conflict path.
+The integration suite includes full-context authentication/authorization, the
+concurrent same-room booking race, PostgreSQL persistence, cancellation, MongoDB
+event logging, and the PostgreSQL exclusion-constraint conflict path.
 
 ### Step 5 — Run the Selenium E2E suite
 
@@ -554,6 +562,9 @@ endpoints are available under `/actuator`.
 
 GitHub Actions runs backend unit tests, Testcontainers integration tests, and the
 packaged build on pushes and pull requests to `main`.
+The Selenium job is available as an opt-in workflow job when repository variable
+`DYNAMICSTAY_RUN_E2E` is set to `true`; it runs manager scenarios and a separate
+admin cancellation scenario.
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|

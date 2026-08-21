@@ -17,6 +17,9 @@
         <selenium.version>4.23.0</selenium.version>
         <junit.version>5.10.3</junit.version>
         <webdrivermanager.version>5.9.2</webdrivermanager.version>
+        <dynamicstay.baseUrl>http://localhost:5500</dynamicstay.baseUrl>
+        <dynamicstay.username>manager</dynamicstay.username>
+        <dynamicstay.password>local-manager-change-me</dynamicstay.password>
     </properties>
 
     <dependencies>
@@ -50,6 +53,8 @@
                 <configuration>
                     <systemPropertyVariables>
                         <dynamicstay.baseUrl>${dynamicstay.baseUrl}</dynamicstay.baseUrl>
+                        <dynamicstay.username>${dynamicstay.username}</dynamicstay.username>
+                        <dynamicstay.password>${dynamicstay.password}</dynamicstay.password>
                     </systemPropertyVariables>
                 </configuration>
             </plugin>

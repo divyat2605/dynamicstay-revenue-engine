@@ -20,7 +20,7 @@ Booking and payment data are committed atomically in PostgreSQL. The occupancy e
 
 - Every request receives or propagates `X-Correlation-Id`; the value is returned in the response and included in the logging MDC.
 - Actuator endpoints: `/actuator/health`, `/actuator/health/readiness`, `/actuator/health/liveness`, `/actuator/metrics`, and `/actuator/prometheus`.
-- Key meters: `pricing.quote.duration`, `booking.creation.duration`, `booking.creation.count`, `booking.failure.count`, and `mongo.event.failure.count`.
+- Key meters: `pricing.quote.duration`, `booking.creation.duration`, `booking.creation.count`, `booking.failure.count`, `booking.cancellation.count`, and `mongo.event.failure.count`.
 
 ## Integration tests
 

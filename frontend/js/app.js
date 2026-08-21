@@ -192,19 +192,19 @@ function renderTrendChart(trend) {
 
 async function loadRecentBookings() {
   const tbody = document.getElementById("bookings-tbody");
-  tbody.innerHTML = `<tr><td colspan="6" class="muted">Loading bookings…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="7" class="muted">Loading bookings…</td></tr>`;
   try {
     const bookings = await DynamicStayApi.getRecentBookings();
     renderBookingsTable(bookings);
   } catch (e) {
-    tbody.innerHTML = `<tr><td colspan="6" class="muted">Failed to load bookings: ${e.message}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="muted">Failed to load bookings: ${e.message}</td></tr>`;
   }
 }
 
 function renderBookingsTable(bookings) {
   const tbody = document.getElementById("bookings-tbody");
   if (!bookings.length) {
-    tbody.innerHTML = `<tr><td colspan="6" class="muted">No bookings yet.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="7" class="muted">No bookings yet.</td></tr>`;
     return;
   }
   tbody.innerHTML = bookings
@@ -217,9 +217,31 @@ function renderBookingsTable(bookings) {
         <td>$${Number(b.finalPrice).toFixed(2)}</td>
         <td><span class="badge">${b.pricingStrategyUsed || "—"}</span></td>
         <td class="status-${b.status}">${b.status}</td>
+        <td>${b.status === "CANCELLED" ? "—" : `<button class="btn btn-secondary cancel-booking-btn" data-booking-id="${b.id}">Cancel</button>`}</td>
       </tr>`
     )
     .join("");
+
+  tbody.querySelectorAll(".cancel-booking-btn").forEach((button) => {
+    button.addEventListener("click", () => cancelBooking(button.dataset.bookingId));
+  });
+}
+
+async function cancelBooking(id) {
+  const resultBox = document.getElementById("booking-result");
+  resultBox.className = "quote-result";
+  resultBox.textContent = "Cancelling booking…";
+  try {
+    const booking = await DynamicStayApi.cancelBooking(id);
+    resultBox.textContent = `Booking #${booking.id} cancelled.`;
+    loadRecentBookings();
+    loadOccupancyToday();
+  } catch (e) {
+    resultBox.className = "quote-result error";
+    resultBox.textContent = e.status === 403
+      ? "Only an administrator can cancel bookings."
+      : `Cancellation failed: ${e.message}`;
+  }
 }
 
 async function onQuoteSubmit(evt) {

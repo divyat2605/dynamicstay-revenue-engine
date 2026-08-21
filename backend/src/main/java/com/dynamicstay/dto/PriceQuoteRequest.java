@@ -3,6 +3,7 @@ package com.dynamicstay.dto;
 import jakarta.validation.constraints.Future;
 import jakarta.validation.constraints.FutureOrPresent;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import lombok.Getter;
 import lombok.Setter;
 
@@ -13,6 +14,7 @@ import java.time.LocalDate;
 public class PriceQuoteRequest {
 
     @NotNull(message = "roomId is required")
+    @Positive(message = "roomId must be positive")
     private Long roomId;
 
     @NotNull(message = "checkIn is required")

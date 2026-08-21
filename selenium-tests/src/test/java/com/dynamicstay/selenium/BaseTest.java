@@ -26,9 +26,9 @@ public abstract class BaseTest {
 
     protected static final String BASE_URL =
             System.getProperty("dynamicstay.baseUrl", "http://localhost:5500");
-        protected static final String USERNAME =
+    protected static final String USERNAME =
             System.getProperty("dynamicstay.username", "manager");
-        protected static final String PASSWORD =
+    protected static final String PASSWORD =
             System.getProperty("dynamicstay.password", "local-manager-change-me");
 
     @BeforeEach

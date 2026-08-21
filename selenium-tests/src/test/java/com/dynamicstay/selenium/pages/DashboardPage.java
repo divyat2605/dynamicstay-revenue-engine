@@ -23,6 +23,10 @@ public class DashboardPage {
     private final By quoteCheckOut = By.id("quote-checkout");
     private final By recalcButton = By.id("recalc-btn");
     private final By quoteResult = By.id("quote-result");
+    private final By loginPanel = By.id("login-panel");
+    private final By logoutButton = By.id("logout-btn");
+    private final By cancelButton = By.cssSelector("#bookings-tbody .cancel-booking-btn");
+    private final By bookingResult = By.id("booking-result");
 
     public DashboardPage(WebDriver driver, WebDriverWait wait) {
         this.driver = driver;
@@ -81,5 +85,24 @@ public class DashboardPage {
 
     public boolean isQuoteResultError() {
         return driver.findElement(quoteResult).getAttribute("class").contains("error");
+    }
+
+    public DashboardPage logout() {
+        driver.findElement(logoutButton).click();
+        wait.until(ExpectedConditions.visibilityOfElementLocated(loginPanel));
+        return this;
+    }
+
+    public DashboardPage cancelFirstBooking() {
+        wait.until(ExpectedConditions.elementToBeClickable(cancelButton)).click();
+        return this;
+    }
+
+    public String waitForBookingResultText() {
+        wait.until(d -> {
+            String text = d.findElement(bookingResult).getText();
+            return text != null && !text.isBlank() && !text.equals("Cancelling booking…");
+        });
+        return driver.findElement(bookingResult).getText();
     }
 }

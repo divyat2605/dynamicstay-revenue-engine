@@ -56,6 +56,8 @@ class PriceUpdateTest extends BaseTest {
                 "Expected a different per-night price for a last-minute stay vs. a far-out stay");
         assertTrue(soonQuoteText.contains("LAST_MINUTE") || soonQuoteText.contains("Strategy"),
                 "Last-minute quote should surface which strategy was applied");
+        assertTrue(soonQuoteText.contains("Lead time"), "Quote should show lead time");
+        assertTrue(soonQuoteText.contains("Adjustments/night"), "Quote should show pricing adjustments");
     }
 
     private double extractPricePerNight(String quoteText) {

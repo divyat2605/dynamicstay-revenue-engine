@@ -38,10 +38,10 @@ public class RateEngine {
     private final LastMinutePricing lastMinutePricing;
 
     @Value("${pricing.engine.last-minute-threshold-days:3}")
-    private int lastMinuteThresholdDays;
+    private int lastMinuteThresholdDays = 3;
 
     @Value("${pricing.engine.high-occupancy-threshold:0.70}")
-    private double highOccupancyThreshold;
+    private double highOccupancyThreshold = 0.70;
 
     public record Quote(
             BigDecimal price,
