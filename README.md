@@ -489,7 +489,7 @@ The suite covers:
 
 ## 8. Notes & Known Limitations
 
-This is a scoped portfolio project, not a production system. A few deliberate simplifications, worth being able to speak to in an interview:
+This is a scoped portfolio project, not a production system. A few deliberate simplifications:
 
 - ⚠️ **No authentication/authorization layer** — a real RMS would gate the "manager" actions behind a role.
 - ⚠️ **Payments are simulated** — `Transaction.paymentStatus` is always `COMPLETED` rather than integrated with a real payment gateway.
