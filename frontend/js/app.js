@@ -6,11 +6,15 @@ let trendChart = null;
 let roomsCache = [];
 
 document.addEventListener("DOMContentLoaded", () => {
-  checkApiHealth();
-  loadRooms();
-  loadOccupancyToday();
-  loadOccupancyTrend();
-  loadRecentBookings();
+  document.getElementById("login-form").addEventListener("submit", onLoginSubmit);
+  document.getElementById("logout-btn").addEventListener("click", logout);
+  window.addEventListener("dynamicstay:unauthorized", showLogin);
+
+  if (sessionStorage.getItem("dynamicstay.basicAuth")) {
+    loadDashboard();
+  } else {
+    showLogin();
+  }
 
   document.getElementById("refresh-rooms-btn").addEventListener("click", loadRooms);
   document.getElementById("quote-form").addEventListener("submit", onQuoteSubmit);
@@ -19,6 +23,49 @@ document.addEventListener("DOMContentLoaded", () => {
   const today = new Date().toISOString().slice(0, 10);
   ["quote-checkin", "book-checkin"].forEach((id) => (document.getElementById(id).min = today));
 });
+
+async function onLoginSubmit(evt) {
+  evt.preventDefault();
+  const resultBox = document.getElementById("login-result");
+  resultBox.className = "quote-result";
+  resultBox.textContent = "Signing in…";
+  DynamicStayApi.setCredentials(
+    document.getElementById("login-username").value,
+    document.getElementById("login-password").value
+  );
+  try {
+    await DynamicStayApi.getRooms();
+    resultBox.className = "quote-result hidden";
+    loadDashboard();
+  } catch (e) {
+    DynamicStayApi.clearCredentials();
+    resultBox.className = "quote-result error";
+    resultBox.textContent = e.status === 401 ? "Invalid username or password." : e.message;
+  }
+}
+
+function loadDashboard() {
+  document.getElementById("login-panel").classList.add("hidden");
+  document.getElementById("dashboard").classList.remove("hidden");
+  document.getElementById("logout-btn").classList.remove("hidden");
+  checkApiHealth();
+  loadRooms();
+  loadOccupancyToday();
+  loadOccupancyTrend();
+  loadRecentBookings();
+}
+
+function showLogin() {
+  document.getElementById("dashboard").classList.add("hidden");
+  document.getElementById("login-panel").classList.remove("hidden");
+  document.getElementById("logout-btn").classList.add("hidden");
+}
+
+function logout() {
+  DynamicStayApi.clearCredentials();
+  document.getElementById("login-password").value = "";
+  showLogin();
+}
 
 async function checkApiHealth() {
   const pill = document.getElementById("api-status");
@@ -194,13 +241,22 @@ async function onQuoteSubmit(evt) {
       &middot; ${quote.nights} night(s) &middot; total
       <strong>$${Number(quote.totalPrice).toFixed(2)}</strong><br/>
       Base rate: $${Number(quote.baseRate).toFixed(2)} &middot;
-      Strategy: <span class="badge">${quote.strategyUsed}</span> &middot;
-      Occupancy at quote time: ${Math.round(quote.occupancyRateAtQuote * 100)}%
+      Occupancy: ${Math.round(quote.occupancyRateAtQuote * 100)}% &middot;
+      Lead time: ${quote.daysUntilCheckIn} day(s)<br/>
+      Dominant strategy: <span class="badge">${quote.strategyUsed}</span><br/>
+      Adjustments/night: seasonal ${formatAdjustment(quote.seasonalAdjustment)},
+      occupancy ${formatAdjustment(quote.occupancyAdjustment)},
+      last-minute ${formatAdjustment(quote.lastMinuteAdjustment)}
     `;
   } catch (e) {
     resultBox.className = "quote-result error";
     resultBox.textContent = `Could not calculate rate: ${e.message}`;
   }
+}
+
+function formatAdjustment(value) {
+  const amount = Number(value || 0);
+  return `${amount >= 0 ? "+" : ""}$${amount.toFixed(2)}`;
 }
 
 async function onBookingSubmit(evt) {

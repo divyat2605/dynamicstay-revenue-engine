@@ -1,10 +1,24 @@
 // Thin fetch wrapper around the DynamicStay REST API.
 // Change API_BASE if the backend isn't on localhost:8080.
 const API_BASE = window.DYNAMICSTAY_API_BASE || "http://localhost:8080/api";
+let authorization = sessionStorage.getItem("dynamicstay.basicAuth") || "";
+
+function setCredentials(username, password) {
+  authorization = `Basic ${btoa(`${username}:${password}`)}`;
+  sessionStorage.setItem("dynamicstay.basicAuth", authorization);
+}
+
+function clearCredentials() {
+  authorization = "";
+  sessionStorage.removeItem("dynamicstay.basicAuth");
+}
 
 async function apiRequest(path, options = {}) {
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      ...(authorization ? { Authorization: authorization } : {}),
+    },
     ...options,
   });
 
@@ -16,6 +30,10 @@ async function apiRequest(path, options = {}) {
   }
 
   if (!res.ok) {
+    if (res.status === 401) {
+      clearCredentials();
+      window.dispatchEvent(new Event("dynamicstay:unauthorized"));
+    }
     const messages = body && body.messages ? body.messages.join(", ") : res.statusText;
     const err = new Error(messages || "Request failed");
     err.status = res.status;
@@ -26,6 +44,8 @@ async function apiRequest(path, options = {}) {
 }
 
 const DynamicStayApi = {
+  setCredentials,
+  clearCredentials,
   getRooms: () => apiRequest("/rooms"),
   getRoom: (id) => apiRequest(`/rooms/${id}`),
 

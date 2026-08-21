@@ -1,0 +1,58 @@
+### Java / Maven ###
+target/
+*.class
+*.jar
+*.war
+*.ear
+.mvn/wrapper/maven-wrapper.jar
+!.mvn/wrapper/maven-wrapper.properties
+
+### Spring Boot ###
+*.log
+application-local.yml
+application-local.properties
+
+### Environment / secrets ###
+.env
+*.env.local
+
+### IDEs ###
+.idea/
+*.iml
+*.iws
+.vscode/
+.settings/
+.project
+.classpath
+.factorypath
+*.launch
+.eclipse/
+
+### OS ###
+.DS_Store
+Thumbs.db
+desktop.ini
+
+### Selenium / driver caches ###
+node_modules/
+.webdriver-manager/
+~/.cache/selenium/
+
+### Frontend ###
+frontend/dist/
+frontend/.cache/
+
+### Test / build artifacts ###
+selenium-tests/target/
+backend/target/
+*.tmp
+*.bak
+coverage/
+.nyc_output/
+
+### Database ###
+*.sqlite
+*.db
+
+### Misc ###
+*.orig

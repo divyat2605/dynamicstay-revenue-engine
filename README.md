@@ -23,11 +23,12 @@
 1. [Project Overview](#1-project-overview)
 2. [Architecture](#2-architecture)
 3. [Tech Stack](#3-tech-stack)
-4. [Architecture Decision Records (ADRs)](#4-architecture-decision-records-adrs)
-5. [Repository Structure](#5-repository-structure)
-6. [Setup & Run Instructions](#6-setup--run-instructions)
-7. [API Reference](#7-api-reference-summary)
-8. [Notes & Known Limitations](#8-notes--known-limitations)
+4. [Security & Configuration](#4-security--configuration)
+5. [Architecture Decision Records (ADRs)](#5-architecture-decision-records-adrs)
+6. [Repository Structure](#6-repository-structure)
+7. [Setup & Run Instructions](#7-setup--run-instructions)
+8. [API Reference](#8-api-reference-summary)
+9. [Notes & Known Limitations](#9-notes--known-limitations)
 
 ---
 
@@ -47,6 +48,11 @@ DynamicStay lets a **manager** view room inventory and occupancy, trigger a rate
 | 🎨 Full-stack integration | A working frontend dashboard wired to the live API |
 | 🤖 QA automation | Browser testing of the critical user flow (Selenium + JUnit, Page Object Model) |
 
+The API is protected by stateless HTTP Basic authentication. A manager can view
+inventory, occupancy, quotes, and bookings; an admin also has cancellation
+authority. Passwords are encoded with BCrypt at startup and are supplied through
+environment variables, never stored in plaintext in the database or source.
+
 ---
 
 ## 2. Architecture
@@ -60,6 +66,7 @@ flowchart TB
     end
 
     subgraph API["🌐 Spring Boot REST API"]
+        SEC[Spring Security Filter Chain]
         RC[RoomController]
         BC[BookingController]
         PC[PricingController]
@@ -91,10 +98,11 @@ flowchart TB
         ST[Booking Flow / Validation / Price Update Tests]
     end
 
-    UI -- REST/JSON --> RC
-    UI -- REST/JSON --> BC
-    UI -- REST/JSON --> PC
-    UI -- REST/JSON --> OC
+    UI -- REST/JSON + Basic Auth --> SEC
+    SEC --> RC
+    SEC --> BC
+    SEC --> PC
+    SEC --> OC
 
     RC --> RS
     BC --> BS
@@ -304,7 +312,38 @@ classDiagram
 
 ---
 
-## 4. Architecture Decision Records (ADRs)
+## 4. Security & Configuration
+
+### Authentication and authorization
+
+Spring Security uses a small in-memory user store for this portfolio project.
+The configured manager receives `ROLE_MANAGER`; the configured admin receives
+`ROLE_ADMIN` and `ROLE_MANAGER`. The application is stateless and uses HTTP
+Basic, so no session or bearer-token store is required. BCrypt hashes the
+configured passwords when the application starts.
+
+| Resource | Manager | Admin | Anonymous |
+|---|---:|---:|---:|
+| Rooms, occupancy, pricing quotes | Read | Read | 401 |
+| Bookings list/create | Yes | Yes | 401 |
+| Booking cancellation | 403 | Yes | 401 |
+| Actuator health, Swagger/OpenAPI | Public | Public | Public |
+
+The local dashboard sends the configured credentials only for the current browser
+session. It does not log credentials or tokens. For a larger deployment, the
+in-memory store can be replaced by an identity provider or a database-backed
+`UserDetailsService` without changing controller contracts.
+
+### Environment configuration
+
+Copy `.env.example` to `.env` for local development and replace every
+`replace-with-*` value. Spring reads database URLs, passwords, user names,
+frontend CORS origins, and authentication credentials from environment variables.
+Production must set all `DYNAMICSTAY_*`, database, and `CORS_ALLOWED_ORIGINS`
+values explicitly. `CORS_ALLOWED_ORIGINS` is a comma-separated allow-list; the
+application never configures `*`.
+
+## 5. Architecture Decision Records (ADRs)
 
 Interviewers care less about *what* you picked and more about *what you gave up*. Each decision below is framed as a tradeoff, not a sales pitch.
 
@@ -340,25 +379,33 @@ Interviewers care less about *what* you picked and more about *what you gave up*
 | **Why not (b)** | More "correct" in principle, but harder to explain and unit-test — reviewers of a portfolio project need to be able to predict the expected price for a given test case, and always-blend makes the dominant signal harder to see in test assertions. |
 | **Tradeoff accepted** | The dominant-strategy-plus-blend approach is a deliberate middle ground: smoother than a pure switch, more explainable than a fully dynamic weighting. |
 
-### ADR-004 — No auth layer, simulated payments
+### ADR-004 — Local HTTP Basic auth, simulated payments
 
 | | |
 |---|---|
-| **Decision** | No authentication/authorization; `Transaction.paymentStatus` is hardcoded to `COMPLETED`. |
-| **Why** | The project's scope is the pricing/booking vertical slice, not identity or payments infrastructure. Adding Spring Security or a real payment gateway (Stripe, etc.) would add substantial surface area without exercising the skills the project is meant to demonstrate. |
-| **Tradeoff accepted** | Not production-ready as-is — explicitly flagged in [Known Limitations](#8-notes--known-limitations) rather than glossed over, which is itself the point in an interview setting: knowing what you left out, and why, matters as much as what you built. |
+| **Decision** | Use Spring Security HTTP Basic with two BCrypt-encoded, environment-configured in-memory users; keep `Transaction.paymentStatus` simulated as `COMPLETED`. |
+| **Why** | This adds testable authentication and role authorization without introducing an external identity provider or payment gateway outside the project's core scope. |
+| **Tradeoff accepted** | The local user store is not a full identity system. A real deployment would delegate identity, password rotation, account recovery, and audit policy to an identity provider. |
 
-### ADR-005 — Wide-open CORS for local demoing
+### ADR-005 — Environment-configured CORS
 
 | | |
 |---|---|
-| **Decision** | `allowedOriginPatterns("*")`. |
-| **Why** | Zero-friction local demo across `localhost:5500` (frontend) and `localhost:8080` (API) without environment-specific config. |
-| **Tradeoff accepted** | Not safe for any real deployment; would be replaced with an explicit allow-list tied to environment config before shipping anywhere real. |
+| **Decision** | Configure explicit browser origins through `CORS_ALLOWED_ORIGINS`, defaulting only to the two local static-server origins. |
+| **Why** | Local development remains frictionless while production can use a deployment-specific allow-list. |
+| **Tradeoff accepted** | A frontend deployed at a new origin requires an environment update and restart; wildcard CORS is intentionally unavailable. |
+
+### ADR-006 — Separate production container composition
+
+| | |
+|---|---|
+| **Decision** | Keep `docker-compose.yml` for local database iteration and add `docker-compose.prod.yml` with the backend image, private database network, required environment values, healthchecks, and persistent volumes. |
+| **Why** | The existing local workflow stays fast, while deployment configuration is explicit and does not pretend that cloud credentials or a hosted platform exist. |
+| **Tradeoff accepted** | Compose is deployment-ready infrastructure, not a complete cloud rollout, secret manager, backup policy, or TLS ingress. |
 
 ---
 
-## 5. Repository Structure
+## 6. Repository Structure
 
 ```
 dynamicstay-revenue-engine/
@@ -389,13 +436,15 @@ dynamicstay-revenue-engine/
 │       ├── PriceUpdateTest.java
 │       └── pages/            # Page Object Model
 ├── docker-compose.yml       # Postgres + MongoDB for local dev
+├── docker-compose.prod.yml  # Backend + private production-style data network
+├── backend/Dockerfile       # Multi-stage non-root runtime image
 ├── .env.example
 └── README.md
 ```
 
 ---
 
-## 6. Setup & Run Instructions
+## 7. Setup & Run Instructions
 
 ### ✅ Prerequisites
 
@@ -407,16 +456,16 @@ dynamicstay-revenue-engine/
 ### Step 1 — Start the data stores
 
 ```bash
+cp .env.example .env
 docker compose up -d
 ```
 
-This starts Postgres on `localhost:5432` and MongoDB on `localhost:27017` with the credentials in `.env.example`. Flyway will create the schema and seed sample data (12 rooms, 10 guests, ~30 bookings) automatically the first time the backend starts.
+This starts Postgres on `localhost:5432` and MongoDB on `localhost:27017` using the values in `.env`. Flyway will create the schema and seed sample data (12 rooms, 10 guests, ~30 bookings) automatically the first time the backend starts.
 
 ### Step 2 — Run the backend
 
 ```bash
 cd backend
-cp ../.env.example .env   # optional — defaults already match docker-compose
 mvn spring-boot:run
 ```
 
@@ -424,8 +473,11 @@ The API comes up on `http://localhost:8080`. Verify with:
 
 ```bash
 curl http://localhost:8080/actuator/health
-curl http://localhost:8080/api/rooms
+curl -u manager:replace-with-a-local-manager-password http://localhost:8080/api/rooms
 ```
+
+The dashboard login uses the manager credentials from `.env`. The admin
+credentials are reserved for cancellation and other administrative operations.
 
 ### Step 3 — Run the frontend
 
@@ -480,9 +532,21 @@ The suite covers:
 | `FormValidationTest` | invalid date ranges and overbooking/double-booking conflicts |
 | `PriceUpdateTest` | verifies a recalculated rate actually changes in the UI between a far-out and a last-minute quote |
 
+For a production-style container run, set every required value in a deployment
+environment file and use:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d --build
+```
+
+The backend image is built in two stages, runs as a non-root user, uses
+container-aware JVM memory settings, and exposes a readiness healthcheck. TLS
+termination, secret management, backups, and platform-specific networking remain
+deployment responsibilities.
+
 ---
 
-## 7. API Reference (summary)
+## 8. API Reference (summary)
 
 Interactive OpenAPI documentation is available at `http://localhost:8080/swagger-ui`
 when the backend is running. Actuator health, readiness, metrics, and Prometheus
@@ -491,28 +555,34 @@ endpoints are available under `/actuator`.
 GitHub Actions runs backend unit tests, Testcontainers integration tests, and the
 packaged build on pushes and pull requests to `main`.
 
-| Method | Endpoint | Description |
-|--------|----------|--------------|
-| `GET`    | `/api/rooms` | List active room inventory |
-| `GET`    | `/api/rooms/{id}` | Get a single room |
-| `POST`   | `/api/pricing/quote` | Recalculate a rate for a room + date range |
-| `GET`    | `/api/bookings` | List the 50 most recent bookings |
-| `POST`   | `/api/bookings` | Create a booking (runs pricing, persists, logs occupancy event) |
-| `DELETE` | `/api/bookings/{id}` | Cancel a booking |
-| `GET`    | `/api/occupancy/today` | Today's occupancy snapshot |
-| `GET`    | `/api/occupancy/trend?from=&to=` | Daily occupancy over a date range (feeds the dashboard chart) |
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `GET`    | `/api/rooms` | MANAGER | List active room inventory |
+| `GET`    | `/api/rooms/{id}` | MANAGER | Get a single room |
+| `POST`   | `/api/pricing/quote` | MANAGER | Recalculate a rate for a room + date range |
+| `GET`    | `/api/bookings` | MANAGER | List the 50 most recent bookings |
+| `POST`   | `/api/bookings` | MANAGER | Create a booking (runs pricing, persists, logs occupancy event) |
+| `DELETE` | `/api/bookings/{id}` | ADMIN | Cancel a pending or confirmed booking |
+| `GET`    | `/api/occupancy/today` | MANAGER | Today's occupancy snapshot |
+| `GET`    | `/api/occupancy/trend?from=&to=` | MANAGER | Daily occupancy over a date range (feeds the dashboard chart) |
+
+`POST /api/pricing/quote` returns the final nightly price and explanation fields
+for base rate, occupancy, lead time, dominant strategy, nights, total price,
+and seasonal/occupancy/last-minute adjustments. Invalid requests return `400`,
+missing or bad credentials return `401`, insufficient roles return `403`, and
+overlap conflicts return `409`.
 
 ---
 
-## 8. Notes & Known Limitations
+## 9. Notes & Known Limitations
 
 This is a scoped portfolio project, not a production system. A few deliberate simplifications:
 
-- ⚠️ **No authentication/authorization layer** — a real RMS would gate the "manager" actions behind a role.
+- ⚠️ **Local in-memory authentication** — credentials and role membership are configured at startup; a real RMS would delegate lifecycle, password rotation, and audit policy to an identity provider.
 - ⚠️ **Payments are simulated** — `Transaction.paymentStatus` is always `COMPLETED` rather than integrated with a real payment gateway.
 - ⚠️ **Pricing model is intentionally simple/explainable** (tiered multipliers) rather than a trained demand-forecasting model, since the goal is demonstrating clean OOP design and system architecture, not ML.
-- ⚠️ **CORS is wide open** (`allowedOriginPatterns("*")`) for easy local demoing — would be locked down before any real deployment.
-- ⚠️ **Authentication/RBAC is intentionally deferred** until a real identity provider and manager/staff permission model are selected.
-- ⚠️ **Hosted deployment is not included** because no cloud target or production secret strategy is specified; the CI pipeline validates the build and tests.
+- ⚠️ **HTTP Basic is a lightweight local mechanism** — use TLS and a managed identity solution before exposing it beyond a trusted network.
+- ⚠️ **CORS origins are environment-configured**; a deployed frontend origin must be explicitly added to `CORS_ALLOWED_ORIGINS`.
+- ⚠️ **Hosted deployment is not included** because no cloud target or production secret strategy is specified; `docker-compose.prod.yml` is deployment-ready configuration, not a hosted service.
 
-See [Section 4](#4-architecture-decision-records-adrs) for the reasoning and tradeoffs behind each of these.
+See [Section 5](#5-architecture-decision-records-adrs) for the reasoning and tradeoffs behind each of these.

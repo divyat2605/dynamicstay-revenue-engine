@@ -5,6 +5,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
+import org.openqa.selenium.By;
+import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 
 import java.time.Duration;
@@ -24,6 +26,10 @@ public abstract class BaseTest {
 
     protected static final String BASE_URL =
             System.getProperty("dynamicstay.baseUrl", "http://localhost:5500");
+        protected static final String USERNAME =
+            System.getProperty("dynamicstay.username", "manager");
+        protected static final String PASSWORD =
+            System.getProperty("dynamicstay.password", "local-manager-change-me");
 
     @BeforeEach
     void setUpDriver() {
@@ -40,6 +46,11 @@ public abstract class BaseTest {
         driver = new ChromeDriver(options);
         wait = new WebDriverWait(driver, Duration.ofSeconds(10));
         driver.get(BASE_URL);
+        wait.until(ExpectedConditions.visibilityOfElementLocated(By.id("login-username")))
+            .sendKeys(USERNAME);
+        driver.findElement(By.id("login-password")).sendKeys(PASSWORD);
+        driver.findElement(By.cssSelector("#login-form button[type='submit']")).click();
+        wait.until(ExpectedConditions.visibilityOfElementLocated(By.id("rooms-tbody")));
     }
 
     @AfterEach

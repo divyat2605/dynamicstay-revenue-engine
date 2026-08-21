@@ -11,6 +11,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -48,6 +49,9 @@ class RateEngineTest {
         assertThat(quote.dominantStrategy()).isEqualTo(PricingStrategyType.LAST_MINUTE);
         // 70*0.60 + 100*0.20 + 100*0.20 = 42 + 20 + 20 = 82.00
         assertThat(quote.price()).isEqualByComparingTo("82.00");
+        assertThat(quote.seasonalAdjustment()).isEqualByComparingTo("0.00");
+        assertThat(quote.occupancyAdjustment()).isEqualByComparingTo("0.00");
+        assertThat(quote.lastMinuteAdjustment()).isEqualByComparingTo("-30.00");
     }
 
     @Test
@@ -77,6 +81,22 @@ class RateEngineTest {
         assertThat(quote.price()).isEqualByComparingTo("115.00");
         verify(occupancyBasedPricing, never()).calculatePrice(any());
         verify(lastMinutePricing, never()).calculatePrice(any());
+    }
+
+    @Test
+    void rejectsInvalidDateRangesBeforeInvokingStrategies() {
+        PricingContext context = PricingContext.builder()
+                .baseRate(new BigDecimal("100.00"))
+                .checkInDate(LocalDate.of(2026, 3, 10))
+                .checkOutDate(LocalDate.of(2026, 3, 10))
+                .currentOccupancyRate(0.3)
+                .today(LocalDate.of(2026, 3, 1))
+                .build();
+
+        assertThatThrownBy(() -> rateEngine.quote(context))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessage("checkOut must be after checkIn");
+        verify(seasonalPricing, never()).calculatePrice(any());
     }
 
     private PricingContext contextDaysOut(int daysOut, double occupancy) {

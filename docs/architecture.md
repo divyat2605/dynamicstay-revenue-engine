@@ -340,21 +340,21 @@ Interviewers care less about *what* you picked and more about *what you gave up*
 | **Why not (b)** | More "correct" in principle, but harder to explain and unit-test — reviewers of a portfolio project need to be able to predict the expected price for a given test case, and always-blend makes the dominant signal harder to see in test assertions. |
 | **Tradeoff accepted** | The dominant-strategy-plus-blend approach is a deliberate middle ground: smoother than a pure switch, more explainable than a fully dynamic weighting. |
 
-### ADR-004 — No auth layer, simulated payments
+### ADR-004 — Local HTTP Basic auth, simulated payments
 
 | | |
 |---|---|
-| **Decision** | No authentication/authorization; `Transaction.paymentStatus` is hardcoded to `COMPLETED`. |
-| **Why** | The project's scope is the pricing/booking vertical slice, not identity or payments infrastructure. Adding Spring Security or a real payment gateway (Stripe, etc.) would add substantial surface area without exercising the skills the project is meant to demonstrate. |
-| **Tradeoff accepted** | Not production-ready as-is — explicitly flagged in [Known Limitations](#8-notes--known-limitations) rather than glossed over, which is itself the point in an interview setting: knowing what you left out, and why, matters as much as what you built. |
+| **Decision** | Use Spring Security HTTP Basic with two BCrypt-encoded, environment-configured in-memory users; keep `Transaction.paymentStatus` simulated as `COMPLETED`. |
+| **Why** | This adds testable authentication and role authorization without introducing an external identity provider or payment gateway outside the project's core scope. |
+| **Tradeoff accepted** | The local user store is not a full identity system. A real deployment would delegate identity, password rotation, account recovery, and audit policy to an identity provider. |
 
-### ADR-005 — Wide-open CORS for local demoing
+### ADR-005 — Environment-configured CORS
 
 | | |
 |---|---|
-| **Decision** | `allowedOriginPatterns("*")`. |
-| **Why** | Zero-friction local demo across `localhost:5500` (frontend) and `localhost:8080` (API) without environment-specific config. |
-| **Tradeoff accepted** | Not safe for any real deployment; would be replaced with an explicit allow-list tied to environment config before shipping anywhere real. |
+| **Decision** | Configure explicit browser origins through `CORS_ALLOWED_ORIGINS`, defaulting only to the two local static-server origins. |
+| **Why** | Local development remains frictionless while production can use a deployment-specific allow-list. |
+| **Tradeoff accepted** | A frontend deployed at a new origin requires an environment update and restart; wildcard CORS is intentionally unavailable. |
 
 ---
 
@@ -474,16 +474,16 @@ The suite covers:
 
 ## 7. API Reference (summary)
 
-| Method | Endpoint | Description |
-|--------|----------|--------------|
-| `GET`    | `/api/rooms` | List active room inventory |
-| `GET`    | `/api/rooms/{id}` | Get a single room |
-| `POST`   | `/api/pricing/quote` | Recalculate a rate for a room + date range |
-| `GET`    | `/api/bookings` | List the 50 most recent bookings |
-| `POST`   | `/api/bookings` | Create a booking (runs pricing, persists, logs occupancy event) |
-| `DELETE` | `/api/bookings/{id}` | Cancel a booking |
-| `GET`    | `/api/occupancy/today` | Today's occupancy snapshot |
-| `GET`    | `/api/occupancy/trend?from=&to=` | Daily occupancy over a date range (feeds the dashboard chart) |
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| `GET`    | `/api/rooms` | MANAGER | List active room inventory |
+| `GET`    | `/api/rooms/{id}` | MANAGER | Get a single room |
+| `POST`   | `/api/pricing/quote` | MANAGER | Recalculate a rate for a room + date range |
+| `GET`    | `/api/bookings` | MANAGER | List the 50 most recent bookings |
+| `POST`   | `/api/bookings` | MANAGER | Create a booking (runs pricing, persists, logs occupancy event) |
+| `DELETE` | `/api/bookings/{id}` | ADMIN | Cancel a booking |
+| `GET`    | `/api/occupancy/today` | MANAGER | Today's occupancy snapshot |
+| `GET`    | `/api/occupancy/trend?from=&to=` | MANAGER | Daily occupancy over a date range (feeds the dashboard chart) |
 
 ---
 
@@ -491,9 +491,9 @@ The suite covers:
 
 This is a scoped portfolio project, not a production system. A few deliberate simplifications, worth being able to speak to in an interview:
 
-- ⚠️ **No authentication/authorization layer** — a real RMS would gate the "manager" actions behind a role.
+- ⚠️ **Local in-memory authentication** — a real RMS would delegate identity lifecycle, password rotation, and audit policy to an identity provider.
 - ⚠️ **Payments are simulated** — `Transaction.paymentStatus` is always `COMPLETED` rather than integrated with a real payment gateway.
 - ⚠️ **Pricing model is intentionally simple/explainable** (tiered multipliers) rather than a trained demand-forecasting model, since the goal is demonstrating clean OOP design and system architecture, not ML.
-- ⚠️ **CORS is wide open** (`allowedOriginPatterns("*")`) for easy local demoing — would be locked down before any real deployment.
+- ⚠️ **CORS origins are environment-configured**; a deployed frontend origin must be explicitly added to `CORS_ALLOWED_ORIGINS`.
 
 See [Section 4](#4-architecture-decision-records-adrs) for the reasoning and tradeoffs behind each of these.

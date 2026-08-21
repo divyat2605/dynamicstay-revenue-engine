@@ -1,6 +1,7 @@
 package com.dynamicstay.pricing;
 
 import lombok.Builder;
+import lombok.AccessLevel;
 import lombok.Getter;
 
 import java.math.BigDecimal;
@@ -27,6 +28,7 @@ public class PricingContext {
     private final LocalDate checkOutDate;
 
     /** Current occupancy across the hotel for the requested date, 0.0–1.0. */
+    @Getter(AccessLevel.NONE)
     private final double currentOccupancyRate;
 
     /** Today's date, injected so strategies stay deterministic/testable. */
@@ -38,6 +40,26 @@ public class PricingContext {
 
     public long nights() {
         return java.time.temporal.ChronoUnit.DAYS.between(checkInDate, checkOutDate);
+    }
+
+    /** Keeps pricing safe when a data source returns an invalid occupancy value. */
+    public double getCurrentOccupancyRate() {
+        if (Double.isNaN(currentOccupancyRate) || currentOccupancyRate <= 0.0) {
+            return 0.0;
+        }
+        return Math.min(1.0, currentOccupancyRate);
+    }
+
+    public void validate() {
+        if (baseRate == null || baseRate.signum() <= 0) {
+            throw new IllegalArgumentException("baseRate must be positive");
+        }
+        if (today == null || checkInDate == null || checkOutDate == null) {
+            throw new IllegalArgumentException("pricing dates are required");
+        }
+        if (!checkOutDate.isAfter(checkInDate)) {
+            throw new IllegalArgumentException("checkOut must be after checkIn");
+        }
     }
 
     /** True for Northern-hemisphere peak leisure travel months (Jun–Aug) and Dec. */

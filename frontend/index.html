@@ -10,10 +10,30 @@
 <body>
 <header class="topbar">
   <h1>DynamicStay <span>Revenue &amp; Booking Dashboard</span></h1>
-  <div id="api-status" class="status-pill">checking API…</div>
+  <div class="topbar-actions">
+    <div id="api-status" class="status-pill">checking API…</div>
+    <button id="logout-btn" class="btn btn-secondary hidden" type="button">Log out</button>
+  </div>
 </header>
 
-<main>
+<section id="login-panel" class="login-panel">
+  <h2>Manager sign in</h2>
+  <p class="muted">Use a configured manager or admin account to access hotel operations.</p>
+  <form id="login-form">
+    <div class="form-row">
+      <label for="login-username">Username</label>
+      <input id="login-username" type="text" autocomplete="username" required />
+    </div>
+    <div class="form-row">
+      <label for="login-password">Password</label>
+      <input id="login-password" type="password" autocomplete="current-password" required />
+    </div>
+    <button class="btn btn-primary" type="submit">Sign in</button>
+  </form>
+  <div id="login-result" class="quote-result hidden"></div>
+</section>
+
+<main id="dashboard" class="hidden">
   <section class="panel" id="occupancy-panel">
     <h2>Today's Occupancy</h2>
     <div class="occupancy-summary">

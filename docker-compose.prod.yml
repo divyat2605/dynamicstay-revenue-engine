@@ -1,0 +1,61 @@
+services:
+  backend:
+    build:
+      context: ./backend
+    restart: unless-stopped
+    environment:
+      SERVER_PORT: 8080
+      POSTGRES_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:?Set POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+      MONGO_URI: mongodb://${MONGO_USER:?Set MONGO_USER}:${MONGO_PASSWORD:?Set MONGO_PASSWORD}@mongo:27017/${MONGO_DB:?Set MONGO_DB}?authSource=admin
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?Set CORS_ALLOWED_ORIGINS}
+      DYNAMICSTAY_MANAGER_USERNAME: ${DYNAMICSTAY_MANAGER_USERNAME:?Set DYNAMICSTAY_MANAGER_USERNAME}
+      DYNAMICSTAY_MANAGER_PASSWORD: ${DYNAMICSTAY_MANAGER_PASSWORD:?Set DYNAMICSTAY_MANAGER_PASSWORD}
+      DYNAMICSTAY_ADMIN_USERNAME: ${DYNAMICSTAY_ADMIN_USERNAME:?Set DYNAMICSTAY_ADMIN_USERNAME}
+      DYNAMICSTAY_ADMIN_PASSWORD: ${DYNAMICSTAY_ADMIN_PASSWORD:?Set DYNAMICSTAY_ADMIN_PASSWORD}
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8080/actuator/health/readiness | grep -q '\"status\":\"UP\"'"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD}
+    volumes:
+      - dynamicstay_pg_prod:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - dynamicstay_mongo_prod:/data/db
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER:?Set MONGO_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD:?Set MONGO_PASSWORD}
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  dynamicstay_pg_prod:
+  dynamicstay_mongo_prod:

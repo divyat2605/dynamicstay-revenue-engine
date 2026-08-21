@@ -65,6 +65,10 @@ public class BookingService {
                     .totalPrice(total)
                     .strategyUsed(result.dominantStrategy().name())
                     .occupancyRateAtQuote(context.getCurrentOccupancyRate())
+                    .daysUntilCheckIn(context.daysUntilCheckIn())
+                    .seasonalAdjustment(result.seasonalAdjustment())
+                    .occupancyAdjustment(result.occupancyAdjustment())
+                    .lastMinuteAdjustment(result.lastMinuteAdjustment())
                     .build();
                 } finally {
             timer.stop(meterRegistry.timer("pricing.quote.duration"));
@@ -142,6 +146,10 @@ public class BookingService {
         Booking booking = bookingRepository.findById(bookingId)
                 .orElseThrow(() -> new com.dynamicstay.exception.ResourceNotFoundException(
                         "Booking not found: " + bookingId));
+        if (booking.getStatus() != BookingStatus.CONFIRMED && booking.getStatus() != BookingStatus.PENDING) {
+            throw new InvalidBookingRequestException(
+                "Only confirmed or pending bookings can be cancelled");
+        }
         booking.setStatus(BookingStatus.CANCELLED);
         booking = bookingRepository.save(booking);
 

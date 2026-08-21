@@ -1,6 +1,7 @@
 package com.dynamicstay.controller;
 
 import com.dynamicstay.dto.OccupancySnapshot;
+import com.dynamicstay.exception.InvalidBookingRequestException;
 import com.dynamicstay.service.OccupancyService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -26,6 +27,9 @@ public class OccupancyController {
     public List<OccupancySnapshot> trend(
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
+        if (to.isBefore(from)) {
+            throw new InvalidBookingRequestException("to must be on or after from");
+        }
         return occupancyService.trend(from, to);
     }
 }

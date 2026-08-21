@@ -9,6 +9,8 @@ import com.dynamicstay.service.BookingService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
+import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.MongoDBContainer;
@@ -26,9 +28,14 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.httpBasic;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @SpringBootTest
 @Testcontainers
+@AutoConfigureMockMvc
 class BookingIntegrationTest {
 
     @Container
@@ -45,6 +52,9 @@ class BookingIntegrationTest {
 
     @Autowired
     private OccupancyEventRepository occupancyEventRepository;
+
+    @Autowired
+    private MockMvc mockMvc;
 
     @DynamicPropertySource
     static void databaseProperties(DynamicPropertyRegistry registry) {
@@ -101,6 +111,30 @@ class BookingIntegrationTest {
         assertThat(bookingRepository.findById(created.getId())).get()
                 .extracting(booking -> booking.getStatus().name()).isEqualTo("CANCELLED");
     }
+
+            @Test
+            void unauthenticatedRequestsAreRejectedByTheFullApplicationContext() throws Exception {
+            mockMvc.perform(get("/api/bookings"))
+                .andExpect(status().isUnauthorized());
+            }
+
+            @Test
+            void managerCanReadButCannotCancelThroughTheFullApplicationContext() throws Exception {
+            mockMvc.perform(get("/api/bookings")
+                    .with(httpBasic("manager", "local-manager-change-me")))
+                .andExpect(status().isOk());
+
+            mockMvc.perform(delete("/api/bookings/999999")
+                    .with(httpBasic("manager", "local-manager-change-me")))
+                .andExpect(status().isForbidden());
+            }
+
+            @Test
+            void adminPassesAuthorizationAndReachesTheController() throws Exception {
+            mockMvc.perform(delete("/api/bookings/999999")
+                    .with(httpBasic("admin", "local-admin-change-me")))
+                .andExpect(status().isNotFound());
+            }
 
     private Future<Boolean> submitBooking(ExecutorService executor, CountDownLatch start,
                                           String email, LocalDate checkIn, LocalDate checkOut) {

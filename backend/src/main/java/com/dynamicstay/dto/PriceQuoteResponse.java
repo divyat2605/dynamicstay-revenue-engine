@@ -19,4 +19,8 @@ public class PriceQuoteResponse {
     private BigDecimal totalPrice;
     private String strategyUsed;
     private double occupancyRateAtQuote;
+    private long daysUntilCheckIn;
+    private BigDecimal seasonalAdjustment;
+    private BigDecimal occupancyAdjustment;
+    private BigDecimal lastMinuteAdjustment;
 }

@@ -22,7 +22,9 @@ class OccupancyBasedPricingTest {
             "0.50, 105.00",
             "0.40, 105.00",
             "0.20, 85.00",
-            "0.00, 85.00"
+            "0.00, 85.00",
+            "-0.20, 85.00",
+            "1.20, 150.00"
     })
     void tieredMultiplierAppliesCorrectly(double occupancy, String expected) {
         PricingContext context = contextWithOccupancy(occupancy);
