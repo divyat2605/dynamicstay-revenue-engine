@@ -1,0 +1,41 @@
+version: "3.9"
+
+# Spins up just the data stores. Run the Spring Boot app and the frontend
+# separately (see README) so you can iterate on them without rebuilding
+# containers.
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: dynamicstay-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: dynamicstay
+      POSTGRES_USER: dynamicstay
+      POSTGRES_PASSWORD: dynamicstay
+    ports:
+      - "5432:5432"
+    volumes:
+      - dynamicstay_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dynamicstay"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  mongo:
+    image: mongo:7
+    container_name: dynamicstay-mongo
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - dynamicstay_mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  dynamicstay_pg_data:
+  dynamicstay_mongo_data:
