@@ -68,16 +68,6 @@ flowchart TB
 
     subgraph SVC["⚙️ Service Layer"]
         RS[RoomService]
-
-To run the Spring integration tests, Docker must be running because Testcontainers
-starts disposable PostgreSQL and MongoDB instances:
-
-```bash
-./mvnw -Pintegration-test test
-```
-
-The integration suite includes the concurrent same-room booking race, persistence,
-cancellation, and the PostgreSQL exclusion-constraint conflict path.
         BS[BookingService]
         RE[RateEngine]
         OS[OccupancyService]
@@ -116,13 +106,6 @@ cancellation, and the PostgreSQL exclusion-constraint conflict path.
     BS --> GUEST
     BS --> TXN
     BS -- on booking event --> OS
-
-Interactive OpenAPI documentation is available at `http://localhost:8080/swagger-ui`
-when the backend is running. Actuator health, readiness, metrics, and Prometheus
-endpoints are available under `/actuator`.
-
-GitHub Actions runs backend unit tests, Testcontainers integration tests, and the
-packaged build on pushes and pull requests to `main`.
     RE --> PS
     RE -- reads occupancy/history --> ROOM
     RE -- reads occupancy/history --> BOOK
@@ -434,7 +417,7 @@ This starts Postgres on `localhost:5432` and MongoDB on `localhost:27017` with t
 ```bash
 cd backend
 cp ../.env.example .env   # optional — defaults already match docker-compose
-./mvnw spring-boot:run
+mvn spring-boot:run
 ```
 
 The API comes up on `http://localhost:8080`. Verify with:
@@ -459,10 +442,20 @@ Open `http://localhost:5500` in your browser. It talks to the API at `http://loc
 
 ```bash
 cd backend
-./mvnw test
+mvn test
 ```
 
 This runs the JUnit + Mockito suite covering all three pricing strategies and `RateEngine`'s selection/blending logic.
+
+To run the Spring integration tests, Docker must be running because Testcontainers
+starts disposable PostgreSQL and MongoDB instances:
+
+```bash
+mvn -Pintegration-test test
+```
+
+The integration suite includes the concurrent same-room booking race, persistence,
+cancellation, and the PostgreSQL exclusion-constraint conflict path.
 
 ### Step 5 — Run the Selenium E2E suite
 
@@ -490,6 +483,13 @@ The suite covers:
 ---
 
 ## 7. API Reference (summary)
+
+Interactive OpenAPI documentation is available at `http://localhost:8080/swagger-ui`
+when the backend is running. Actuator health, readiness, metrics, and Prometheus
+endpoints are available under `/actuator`.
+
+GitHub Actions runs backend unit tests, Testcontainers integration tests, and the
+packaged build on pushes and pull requests to `main`.
 
 | Method | Endpoint | Description |
 |--------|----------|--------------|
